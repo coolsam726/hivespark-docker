@@ -9,13 +9,24 @@ set -e
 /entrypoint/wait-for-port.sh namenode 9000 120
 
 # 3. Initialize schema if not already done
-SCHEMA_FLAG="${HIVE_HOME}/.schema_initialized"
+# SCHEMA_FLAG is a file inside the persistent volume directory
+SCHEMA_FLAG="${HIVE_HOME}/.schema_data/initialized"
+mkdir -p "${HIVE_HOME}/.schema_data"
+
 if [ ! -f "${SCHEMA_FLAG}" ]; then
-    echo ">>> Initializing Hive Metastore schema in PostgreSQL ..."
-    ${HIVE_HOME}/bin/schematool \
-        -dbType postgres \
-        -initSchema \
-        --verbose && \
+    echo ">>> Checking Hive Metastore schema in PostgreSQL ..."
+    # Check by inspecting schematool -info output text, not just exit code
+    # (exit code is unreliable when schema version != Hive version)
+    SCHEMA_INFO=$(${HIVE_HOME}/bin/schematool -dbType postgres -info 2>&1 || true)
+    if echo "${SCHEMA_INFO}" | grep -qE "Metastore schema version|Hive distribution version"; then
+        echo ">>> Schema already exists; skipping initialization."
+    else
+        echo ">>> Initializing Hive Metastore schema ..."
+        ${HIVE_HOME}/bin/schematool \
+            -dbType postgres \
+            -initSchema \
+            --verbose
+    fi
     touch "${SCHEMA_FLAG}"
     echo ">>> Schema initialization complete."
 else

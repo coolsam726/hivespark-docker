@@ -1,4 +1,4 @@
-.PHONY: build download up down restart logs clean ps
+.PHONY: build download up down restart logs clean ps beeline pyspark spark-shell hue jupyter
 
 # Pre-download all large archives (run once; skips files that already exist)
 download:
@@ -32,6 +32,8 @@ up: build
 	@echo "  Spark History UI  : http://localhost:18080"
 	@echo "  MR History UI     : http://localhost:19888"
 	@echo "  PostgreSQL        : localhost:5432  (user=hive, pass=hive, db=metastore)"
+	@echo "  Hue (SQL editor)  : http://localhost:8889"
+	@echo "  JupyterLab        : http://localhost:8888"
 
 down:
 	docker compose down
@@ -58,16 +60,29 @@ clean:
 # Open a beeline session to HiveServer2
 beeline:
 	docker exec -it hiveserver2 \
-	    ${HIVE_HOME:-/opt/hive}/bin/beeline -u "jdbc:hive2://hiveserver2:10000"
+	    $${HIVE_HOME:-/opt/hive}/bin/beeline -u "jdbc:hive2://hiveserver2:10000"
 
 # Open a PySpark shell connected to the Spark standalone cluster
 pyspark:
 	docker exec -it spark-master \
-	    ${SPARK_HOME:-/opt/spark}/bin/pyspark \
+	    $${SPARK_HOME:-/opt/spark}/bin/pyspark \
 	    --master spark://spark-master:7077
 
 # Open a Spark shell (Scala)
 spark-shell:
 	docker exec -it spark-master \
-	    ${SPARK_HOME:-/opt/spark}/bin/spark-shell \
+	    $${SPARK_HOME:-/opt/spark}/bin/spark-shell \
 	    --master spark://spark-master:7077
+
+# Open Hue in the default browser
+hue:
+	@echo "Opening Hue at http://localhost:8889 ..."
+	@xdg-open http://localhost:8889 2>/dev/null || open http://localhost:8889 2>/dev/null || \
+	    echo "Navigate to: http://localhost:8889"
+
+# Print the JupyterLab URL with auth token from container logs
+jupyter:
+	@echo "JupyterLab URL (with token):"
+	@docker logs jupyterlab 2>&1 | grep "http://127.0.0.1:8888/lab?token=" | tail -1 | \
+	    sed 's|127.0.0.1:8888|localhost:8888|' || \
+	    echo "  Container not running. Start with: docker compose up -d jupyterlab"

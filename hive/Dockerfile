@@ -6,17 +6,25 @@ FROM hivespark/hadoop-base:latest
 
 ARG HIVE_VERSION=4.0.0
 ARG POSTGRES_JDBC_VERSION=42.7.3
+ARG SPARK_VERSION=3.5.1
 
 ENV HIVE_VERSION=${HIVE_VERSION}
 ENV HIVE_HOME=/opt/hive
 ENV HIVE_CONF_DIR=${HIVE_HOME}/conf
-ENV PATH=${PATH}:${HIVE_HOME}/bin
+ENV SPARK_HOME=/opt/spark
+ENV PATH=${PATH}:${HIVE_HOME}/bin:${SPARK_HOME}/bin
 
 # ─── Apache Hive ─────────────────────────────────────────────────────────────
 COPY downloads/apache-hive-${HIVE_VERSION}-bin.tar.gz /tmp/hive.tar.gz
 RUN tar -xzf /tmp/hive.tar.gz -C /opt && \
     mv /opt/apache-hive-${HIVE_VERSION}-bin ${HIVE_HOME} && \
     rm /tmp/hive.tar.gz
+
+# ─── Apache Spark (jars required for Hive-on-Spark engine) ───────────────────
+COPY downloads/spark-${SPARK_VERSION}-bin-hadoop3.tgz /tmp/spark.tar.gz
+RUN tar -xzf /tmp/spark.tar.gz -C /opt && \
+    mv /opt/spark-${SPARK_VERSION}-bin-hadoop3 ${SPARK_HOME} && \
+    rm /tmp/spark.tar.gz
 
 # ─── PostgreSQL JDBC driver (for Hive Metastore backend) ─────────────────────
 COPY downloads/postgresql-${POSTGRES_JDBC_VERSION}.jar ${HIVE_HOME}/lib/postgresql-${POSTGRES_JDBC_VERSION}.jar

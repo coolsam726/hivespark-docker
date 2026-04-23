@@ -10,6 +10,8 @@
 | **Spark**       | 3.5.1    | 8, 11, or 17    |
 | **PostgreSQL**  | 15       | N/A             |
 | **PySpark**     | 3.5.1    | (via Spark)     |
+| **Hue**         | latest   | N/A             |
+| **JupyterLab**  | spark-3.5.3 (pyspark-notebook) | N/A |
 
 > **Why Java 11?** Hive 4.0.0 officially requires Java 11 as minimum. Hadoop 3.3.x and Spark 3.5.x both support Java 11 — making it the safe common baseline.
 
@@ -40,6 +42,11 @@
 │  │ spark-master │    │ spark-worker │    │ spark-history │    │
 │  │  :8080/:7077 │◄───│  :8081       │    │  :18080       │    │
 │  └──────────────┘    └──────────────┘    └───────────────┘    │
+│                                                                 │
+│  ┌───────────────────┐    ┌──────────────────────────────┐    │
+│  │ hue               │    │ jupyterlab                   │    │
+│  │  :8889 (→8888)    │    │  :8888                       │    │
+│  └───────────────────┘    └──────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -73,6 +80,8 @@ Full startup takes **~2 minutes**. Services start in this order:
 | Spark Master        | http://localhost:8080      |
 | Spark History Server| http://localhost:18080     |
 | MR History Server   | http://localhost:19888     |
+| Hue (SQL editor)    | http://localhost:8889      |
+| JupyterLab          | http://localhost:8888      |
 
 ---
 
@@ -111,6 +120,107 @@ spark.sql("INSERT INTO nums VALUES (1),(2),(3)")
 spark.sql("SELECT * FROM nums").show()
 ```
 
+### Hue (SQL / HQL editor)
+
+Hue provides a browser-based SQL editor wired to HiveServer2.
+
+```
+URL  : http://localhost:8889
+User : admin   (set on first login — Hue will prompt you to create an account)
+```
+
+1. Open http://localhost:8889
+2. On first launch Hue asks you to create an admin account — fill in any username/password.
+3. Go to **Editor → Hive** to run HQL queries against HiveServer2.
+
+> HDFS file browser and YARN job browser are also available via the left-hand sidebar.
+
+---
+
+### JupyterLab (PySpark notebooks)
+
+JupyterLab runs a pre-built `pyspark-notebook` image with Spark 3.5 already installed.
+
+```
+URL   : http://localhost:8888/lab?token=hivespark
+Token : hivespark
+```
+
+Create a new notebook and connect to the Spark standalone cluster:
+
+```python
+import os
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder \
+    .appName("notebook") \
+    .master(os.environ["SPARK_MASTER"]) \
+    .config("spark.hadoop.fs.defaultFS", "hdfs://namenode:9000") \
+    .getOrCreate()
+
+spark.range(5).show()
+```
+
+The `SPARK_MASTER` environment variable is pre-set to `spark://spark-master:7077` by docker-compose, so no hard-coding is needed.
+
+To access the Hive metastore from a notebook:
+
+```python
+spark = SparkSession.builder \
+    .appName("notebook-hive") \
+    .master(os.environ["SPARK_MASTER"]) \
+    .config("spark.hadoop.fs.defaultFS", "hdfs://namenode:9000") \
+    .config("spark.sql.catalogImplementation", "hive") \
+    .config("hive.metastore.uris", "thrift://hive-metastore:9083") \
+    .enableHiveSupport() \
+    .getOrCreate()
+
+spark.sql("SHOW DATABASES").show()
+```
+
+Notebooks saved to `/home/jovyan/work` inside the container are persisted in the `jupyter-work` Docker volume.
+
+---
+
+### PyCharm Database Tool
+
+PyCharm's built-in Database tool connects to HiveServer2 via the Apache Hive JDBC driver.
+
+**Step 1 — Open the data source wizard**
+- Go to **View → Tool Windows → Database**
+- Click **+** → **Data Source → Apache Hive**
+
+**Step 2 — Configure the connection**
+
+| Field       | Value                          |
+|-------------|-------------------------------|
+| Host        | `localhost`                   |
+| Port        | `10000`                       |
+| Database    | *(leave blank for default)*   |
+| User        | *(any value, e.g. `hive`)*    |
+| Password    | *(leave blank)*               |
+
+The resulting JDBC URL will be:
+```
+jdbc:hive2://localhost:10000
+```
+
+**Step 3 — Download the driver**
+- PyCharm will show a **"Driver files are not configured"** warning at the bottom of the dialog.
+- Click **Download** — PyCharm will automatically fetch the Hive JDBC driver from Maven.
+
+**Step 4 — Test & Connect**
+- Click **Test Connection** — you should see `Successful`.
+- Click **OK**. The Hive catalog will appear in the Database panel.
+
+> **Tip:** If the test fails, make sure HiveServer2 is fully started first:
+> ```bash
+> docker exec hiveserver2 ss -tlnp | grep 10000
+> ```
+> The port must be listed before connections are accepted.
+
+---
+
 ### JDBC (from host machine)
 ```
 JDBC URL : jdbc:hive2://localhost:10000
@@ -145,6 +255,8 @@ hivespark/
 │   ├── Dockerfile              # FROM hadoop-base + Spark 3.5.1 (PySpark)
 │   └── conf/
 │       └── spark-defaults.conf
+├── hue/
+│   └── hue.ini                 # Hue config (HiveServer2, HDFS, YARN endpoints)
 └── scripts/
     ├── wait-for-port.sh
     ├── namenode.sh

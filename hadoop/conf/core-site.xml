@@ -12,4 +12,15 @@
     <name>fs.trash.interval</name>
     <value>60</value>
   </property>
+
+  <!-- Allow root user (running in Docker containers) to proxy any user/group -->
+  <property>
+    <name>hadoop.proxyuser.root.hosts</name>
+    <value>*</value>
+  </property>
+
+  <property>
+    <name>hadoop.proxyuser.root.groups</name>
+    <value>*</value>
+  </property>
 </configuration>
