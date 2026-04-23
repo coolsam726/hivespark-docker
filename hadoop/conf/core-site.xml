@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<configuration>
+  <!-- Primary NameNode address (service name from docker-compose) -->
+  <property>
+    <name>fs.defaultFS</name>
+    <value>hdfs://namenode:9000</value>
+  </property>
+
+  <!-- Enables Trash so accidental deletes are recoverable -->
+  <property>
+    <name>fs.trash.interval</name>
+    <value>60</value>
+  </property>
+</configuration>

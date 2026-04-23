@@ -1,0 +1,5 @@
+# Downloaded archives — do not commit large binaries
+downloads/*.tar.gz
+downloads/*.tgz
+downloads/*.jar
+downloads/*.tar.gz.tmp

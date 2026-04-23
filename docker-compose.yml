@@ -1,0 +1,270 @@
+version: "3.8"
+
+# =============================================================================
+#  Hadoop 3.3.6 + Hive 4.0.0 + Spark 3.5.1 (PySpark) + PostgreSQL 15
+#  Common Java version: OpenJDK 11 (eclipse-temurin:11-jdk-jammy)
+# =============================================================================
+
+x-hadoop-env: &hadoop-env
+  HADOOP_HOME: /opt/hadoop
+  HADOOP_CONF_DIR: /opt/hadoop/etc/hadoop
+  HADOOP_LOG_DIR: /var/log/hadoop
+  HDFS_NAMENODE_USER: root
+  HDFS_DATANODE_USER: root
+  HDFS_SECONDARYNAMENODE_USER: root
+  YARN_RESOURCEMANAGER_USER: root
+  YARN_NODEMANAGER_USER: root
+
+services:
+
+  # ── PostgreSQL 15 — Hive Metastore backend ─────────────────────────────────
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    hostname: postgres
+    environment:
+      POSTGRES_DB: metastore
+      POSTGRES_USER: hive
+      POSTGRES_PASSWORD: hive
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hive -d metastore"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - hadoop-net
+
+  # ── HDFS NameNode ──────────────────────────────────────────────────────────
+  namenode:
+    build:
+      context: .
+      dockerfile: base/Dockerfile
+    image: hivespark/hadoop-base:latest
+    container_name: namenode
+    hostname: namenode
+    environment:
+      <<: *hadoop-env
+    volumes:
+      - namenode-data:/opt/hadoop/data/nameNode
+      - hadoop-logs:/var/log/hadoop
+    ports:
+      - "9870:9870"   # HDFS Web UI
+      - "9000:9000"   # HDFS IPC
+    command: ["/entrypoint/namenode.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "hdfs dfsadmin -report | grep 'Live datanodes' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - hadoop-net
+
+  # ── HDFS DataNode ──────────────────────────────────────────────────────────
+  datanode:
+    build:
+      context: .
+      dockerfile: base/Dockerfile
+    image: hivespark/hadoop-base:latest
+    container_name: datanode
+    hostname: datanode
+    environment:
+      <<: *hadoop-env
+    depends_on:
+      namenode:
+        condition: service_started
+    volumes:
+      - datanode-data:/opt/hadoop/data/dataNode
+      - hadoop-logs:/var/log/hadoop
+    ports:
+      - "9864:9864"   # DataNode Web UI
+    command: ["/entrypoint/datanode.sh"]
+    networks:
+      - hadoop-net
+
+  # ── YARN ResourceManager ────────────────────────────────────────────────────
+  resourcemanager:
+    build:
+      context: .
+      dockerfile: base/Dockerfile
+    image: hivespark/hadoop-base:latest
+    container_name: resourcemanager
+    hostname: resourcemanager
+    environment:
+      <<: *hadoop-env
+    depends_on:
+      namenode:
+        condition: service_started
+    ports:
+      - "8088:8088"   # YARN Web UI
+    command: ["/entrypoint/resourcemanager.sh"]
+    networks:
+      - hadoop-net
+
+  # ── YARN NodeManager ────────────────────────────────────────────────────────
+  nodemanager:
+    build:
+      context: .
+      dockerfile: base/Dockerfile
+    image: hivespark/hadoop-base:latest
+    container_name: nodemanager
+    hostname: nodemanager
+    environment:
+      <<: *hadoop-env
+    depends_on:
+      resourcemanager:
+        condition: service_started
+    ports:
+      - "8042:8042"   # NodeManager Web UI
+    command: ["/entrypoint/nodemanager.sh"]
+    networks:
+      - hadoop-net
+
+  # ── MapReduce History Server ────────────────────────────────────────────────
+  historyserver:
+    build:
+      context: .
+      dockerfile: base/Dockerfile
+    image: hivespark/hadoop-base:latest
+    container_name: historyserver
+    hostname: historyserver
+    environment:
+      <<: *hadoop-env
+    depends_on:
+      namenode:
+        condition: service_started
+    ports:
+      - "19888:19888"  # MR History Web UI
+    command: ["/entrypoint/historyserver.sh"]
+    networks:
+      - hadoop-net
+
+  # ── Hive Metastore ──────────────────────────────────────────────────────────
+  hive-metastore:
+    build:
+      context: .
+      dockerfile: hive/Dockerfile
+    image: hivespark/hive:latest
+    container_name: hive-metastore
+    hostname: hive-metastore
+    environment:
+      <<: *hadoop-env
+      HIVE_HOME: /opt/hive
+    depends_on:
+      postgres:
+        condition: service_healthy
+      namenode:
+        condition: service_started
+    volumes:
+      - hive-metastore-data:/opt/hive/.schema_initialized
+    ports:
+      - "9083:9083"   # Metastore Thrift
+    command: ["/entrypoint/hive-metastore.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 9083 || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 15
+      start_period: 90s
+    networks:
+      - hadoop-net
+
+  # ── HiveServer2 ─────────────────────────────────────────────────────────────
+  hiveserver2:
+    build:
+      context: .
+      dockerfile: hive/Dockerfile
+    image: hivespark/hive:latest
+    container_name: hiveserver2
+    hostname: hiveserver2
+    environment:
+      <<: *hadoop-env
+      HIVE_HOME: /opt/hive
+    depends_on:
+      hive-metastore:
+        condition: service_healthy
+    ports:
+      - "10000:10000"  # JDBC/Thrift
+      - "10002:10002"  # HiveServer2 Web UI
+    command: ["/entrypoint/hiveserver2.sh"]
+    networks:
+      - hadoop-net
+
+  # ── Spark Master (Standalone mode) ──────────────────────────────────────────
+  spark-master:
+    build:
+      context: .
+      dockerfile: spark/Dockerfile
+    image: hivespark/spark:latest
+    container_name: spark-master
+    hostname: spark-master
+    environment:
+      <<: *hadoop-env
+      SPARK_HOME: /opt/spark
+      SPARK_NO_DAEMONIZE: "true"
+    depends_on:
+      namenode:
+        condition: service_started
+    ports:
+      - "8080:8080"   # Spark Master Web UI
+      - "7077:7077"   # Spark Master submit port
+    command: ["/entrypoint/spark-master.sh"]
+    networks:
+      - hadoop-net
+
+  # ── Spark Worker ─────────────────────────────────────────────────────────────
+  spark-worker:
+    build:
+      context: .
+      dockerfile: spark/Dockerfile
+    image: hivespark/spark:latest
+    container_name: spark-worker
+    hostname: spark-worker
+    environment:
+      <<: *hadoop-env
+      SPARK_HOME: /opt/spark
+      SPARK_NO_DAEMONIZE: "true"
+    depends_on:
+      spark-master:
+        condition: service_started
+    ports:
+      - "8081:8081"   # Spark Worker Web UI
+    command: ["/entrypoint/spark-worker.sh"]
+    networks:
+      - hadoop-net
+
+  # ── Spark History Server ─────────────────────────────────────────────────────
+  spark-history:
+    build:
+      context: .
+      dockerfile: spark/Dockerfile
+    image: hivespark/spark:latest
+    container_name: spark-history
+    hostname: spark-history
+    environment:
+      <<: *hadoop-env
+      SPARK_HOME: /opt/spark
+    depends_on:
+      namenode:
+        condition: service_started
+    ports:
+      - "18080:18080"  # Spark History Server Web UI
+    command: ["/entrypoint/spark-history.sh"]
+    networks:
+      - hadoop-net
+
+# ─────────────────────────────────────────────────────────────────────────────
+volumes:
+  postgres-data:
+  namenode-data:
+  datanode-data:
+  hadoop-logs:
+  hive-metastore-data:
+
+networks:
+  hadoop-net:
+    driver: bridge
