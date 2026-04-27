@@ -12,7 +12,7 @@
 | **PostgreSQL**  | 15       | N/A              |
 | **PySpark**     | 3.5.1    | (via Spark)      |
 | **Hue**         | latest   | N/A              |
-| **JupyterLab**  | spark-3.5.3 (pyspark-notebook) | N/A |
+| **JupyterLab**  | spark-3.5.1 (pyspark-notebook) | N/A |
 
 > **Why Java 11?** Hive 4.0.0 officially requires Java 11 as minimum. Hadoop 3.3.x and Spark 3.5.x both support Java 11 — making it the safe common baseline.
 

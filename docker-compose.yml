@@ -531,7 +531,7 @@ services:
 
   # ── JupyterLab (PySpark notebooks) ──────────────────────────────────────────
   jupyterlab:
-    image: quay.io/jupyter/pyspark-notebook:spark-3.5.3
+    image: quay.io/jupyter/pyspark-notebook:spark-3.5.1
     container_name: jupyterlab
     hostname: jupyterlab
     environment:
