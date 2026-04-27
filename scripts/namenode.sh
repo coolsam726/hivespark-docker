@@ -21,8 +21,15 @@ fi
     hdfs dfs -mkdir -p /user/root
     hdfs dfs -mkdir -p /spark-logs
     hdfs dfs -mkdir -p /tmp
-    hdfs dfs -chmod g+w   /tmp
+    hdfs dfs -mkdir -p /tmp/hadoop-yarn/staging
+    hdfs dfs -chmod 1777  /tmp
+    hdfs dfs -chmod 1777  /tmp/hadoop-yarn
+    hdfs dfs -chmod 1777  /tmp/hadoop-yarn/staging
     hdfs dfs -chmod 777   /user/hive/warehouse
+    hdfs dfs -mkdir -p /apps/tez
+    hdfs dfs -chmod 755   /apps/tez
+    hdfs dfs -mkdir -p /tmp/tez/staging
+    hdfs dfs -chmod 1777  /tmp/tez/staging
     echo ">>> HDFS directories ready."
 ) &
 

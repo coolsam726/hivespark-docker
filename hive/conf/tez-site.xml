@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<configuration>
+
+  <!-- ── Tez Application Master ─────────────────────────────────────────── -->
+  <!-- YARN container for Tez AM — 2 GB out of 10 GB NM budget -->
+  <property>
+    <name>tez.am.resource.memory.mb</name>
+    <value>4096</value>
+  </property>
+
+  <!-- JVM heap for the Tez AM (~80% of 2048 MB) -->
+  <property>
+    <name>tez.am.java.opts</name>
+    <value>-server -Xmx3276m -Djava.net.preferIPv4Stack=true</value>
+  </property>
+
+  <!-- ── Tez Task Containers ────────────────────────────────────────────── -->
+  <!-- 4 GB per task — allows 2 concurrent tasks + AM on 10 GB NM -->
+  <property>
+    <name>tez.task.resource.memory.mb</name>
+    <value>4096</value>
+  </property>
+
+  <!-- JVM heap per task container (~80% of 4096 MB) -->
+  <property>
+    <name>tez.task.launch.cmd-opts</name>
+    <value>-server -Xmx3276m -Djava.net.preferIPv4Stack=true</value>
+  </property>
+
+  <!-- Fraction of container memory usable as JVM heap (keep at 0.8) -->
+  <property>
+    <name>tez.container.max.java.heap.fraction</name>
+    <value>0.8</value>
+  </property>
+
+  <!-- Use Hadoop jars provided by the YARN cluster classpath. -->
+  <property>
+    <name>tez.use.cluster.hadoop-libs</name>
+    <value>true</value>
+  </property>
+
+
+  <!-- ── Container reuse (avoids JVM startup overhead between tasks) ─────── -->
+  <property>
+    <name>tez.am.container.reuse.enabled</name>
+    <value>true</value>
+  </property>
+
+  <!-- ── HDFS staging directory for Tez session files ──────────────────── -->
+  <property>
+    <name>tez.staging-dir</name>
+    <value>/tmp/tez/staging</value>
+  </property>
+
+</configuration>

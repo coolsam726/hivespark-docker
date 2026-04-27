@@ -45,15 +45,25 @@
     <value>JAVA_HOME,HADOOP_COMMON_HOME,HADOOP_HDFS_HOME,HADOOP_CONF_DIR,CLASSPATH_PREPEND_DISTCACHE,HADOOP_YARN_HOME,HADOOP_HOME,PATH,LANG,TZ,HADOOP_MAPRED_HOME</value>
   </property>
 
-  <!-- Memory for NodeManager (suitable for dev; increase for production) -->
+  <property>
+    <name>yarn.application.classpath</name>
+    <value>$HADOOP_CONF_DIR,$HADOOP_HOME/share/hadoop/common/*,$HADOOP_HOME/share/hadoop/common/lib/*,$HADOOP_HOME/share/hadoop/hdfs/*,$HADOOP_HOME/share/hadoop/hdfs/lib/*,$HADOOP_HOME/share/hadoop/yarn/*,$HADOOP_HOME/share/hadoop/yarn/lib/*,$HADOOP_HOME/share/hadoop/mapreduce/*,$HADOOP_HOME/share/hadoop/mapreduce/lib/*</value>
+  </property>
+
+  <!-- Memory for NodeManager — 10 GB out of 16 GB machine budget -->
   <property>
     <name>yarn.nodemanager.resource.memory-mb</name>
-    <value>4096</value>
+    <value>10240</value>
   </property>
 
   <property>
     <name>yarn.scheduler.maximum-allocation-mb</name>
-    <value>4096</value>
+    <value>10240</value>
+  </property>
+
+  <property>
+    <name>yarn.scheduler.minimum-allocation-mb</name>
+    <value>512</value>
   </property>
 
   <!-- Disable virtual memory check (common issue in containers) -->

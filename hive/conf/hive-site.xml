@@ -69,40 +69,16 @@
     <value>NONE</value>
   </property>
 
-  <!-- ── Execution engine: Spark ───────────────────────────────────────── -->
+  <!-- ── Execution engine: Tez ────────────────────────────────────────── -->
   <property>
     <name>hive.execution.engine</name>
-    <value>spark</value>
+    <value>tez</value>
   </property>
 
-  <!-- Spark standalone master in the docker network -->
+  <!-- Path to the Tez tarball on HDFS (uploaded once by hiveserver2.sh) -->
   <property>
-    <name>spark.master</name>
-    <value>spark://spark-master:7077</value>
-  </property>
-
-  <!-- Spark home inside the hive container (Spark jars must be present) -->
-  <property>
-    <name>spark.home</name>
-    <value>/opt/spark</value>
-  </property>
-
-  <!-- Executor memory per Spark task -->
-  <property>
-    <name>spark.executor.memory</name>
-    <value>1g</value>
-  </property>
-
-  <!-- Driver memory (runs inside hiveserver2 JVM) -->
-  <property>
-    <name>spark.driver.memory</name>
-    <value>1g</value>
-  </property>
-
-  <!-- Allow Spark to dynamically allocate executors -->
-  <property>
-    <name>spark.dynamicAllocation.enabled</name>
-    <value>false</value>
+    <name>tez.lib.uris</name>
+    <value>hdfs://namenode:9000/apps/tez/tez.tar.gz</value>
   </property>
 
   <!-- ── Auto-create metastore schema on first start ───────────────────── -->
@@ -120,6 +96,23 @@
   <property>
     <name>hive.stats.autogather</name>
     <value>false</value>
+  </property>
+
+  <!-- ── Authorization: disable SQL-std role enforcement (dev mode) ──────── -->
+  <property>
+    <name>hive.security.authorization.enabled</name>
+    <value>false</value>
+  </property>
+
+  <property>
+    <name>hive.security.authorization.manager</name>
+    <value>org.apache.hadoop.hive.ql.security.authorization.DefaultHiveAuthorizationProvider</value>
+  </property>
+
+  <!-- Grant hive user admin rights for role management -->
+  <property>
+    <name>hive.users.in.admin.role</name>
+    <value>hive</value>
   </property>
 
 </configuration>

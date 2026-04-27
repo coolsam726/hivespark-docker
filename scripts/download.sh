@@ -6,6 +6,7 @@ set -e
 HADOOP_VERSION="${HADOOP_VERSION:-3.3.6}"
 HIVE_VERSION="${HIVE_VERSION:-4.0.0}"
 SPARK_VERSION="${SPARK_VERSION:-3.5.1}"
+TEZ_VERSION="${TEZ_VERSION:-0.10.4}"
 POSTGRES_JDBC_VERSION="${POSTGRES_JDBC_VERSION:-42.7.3}"
 
 DOWNLOADS_DIR="$(cd "$(dirname "$0")/.." && pwd)/downloads"
@@ -36,6 +37,11 @@ echo "==> Downloading Spark ${SPARK_VERSION} ..."
 download_if_missing \
     "https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop3.tgz" \
     "${DOWNLOADS_DIR}/spark-${SPARK_VERSION}-bin-hadoop3.tgz"
+
+echo "==> Downloading Tez ${TEZ_VERSION} ..."
+download_if_missing \
+    "https://archive.apache.org/dist/tez/${TEZ_VERSION}/apache-tez-${TEZ_VERSION}-bin.tar.gz" \
+    "${DOWNLOADS_DIR}/apache-tez-${TEZ_VERSION}-bin.tar.gz"
 
 echo "==> Downloading PostgreSQL JDBC ${POSTGRES_JDBC_VERSION} ..."
 download_if_missing \
