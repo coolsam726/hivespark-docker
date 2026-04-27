@@ -7,13 +7,16 @@
 | **Java**        | 11 (LTS) | —               |
 | **Hadoop**      | 3.3.6    | 8 or 11         |
 | **Hive**        | 4.0.0    | 11+ (required)  |
-| **Spark**       | 3.5.1    | 8, 11, or 17    |
-| **PostgreSQL**  | 15       | N/A             |
-| **PySpark**     | 3.5.1    | (via Spark)     |
-| **Hue**         | latest   | N/A             |
+| **Tez**         | 0.10.4   | 8 or 11          |
+| **Spark**       | 3.5.1    | 8, 11, or 17     |
+| **PostgreSQL**  | 15       | N/A              |
+| **PySpark**     | 3.5.1    | (via Spark)      |
+| **Hue**         | latest   | N/A              |
 | **JupyterLab**  | spark-3.5.3 (pyspark-notebook) | N/A |
 
 > **Why Java 11?** Hive 4.0.0 officially requires Java 11 as minimum. Hadoop 3.3.x and Spark 3.5.x both support Java 11 — making it the safe common baseline.
+
+> **Hive execution engine:** Hive uses **Tez** as its query execution engine, running on YARN. This gives significantly better performance than MapReduce for SQL workloads. The standalone Spark cluster (`spark-master` / `spark-worker`) is a separate service used directly via `spark-submit`, PySpark, or JupyterLab — it is not related to Hive's execution engine.
 
 ---
 
@@ -248,9 +251,10 @@ hivespark/
 │       ├── yarn-site.xml
 │       └── workers
 ├── hive/
-│   ├── Dockerfile              # FROM hadoop-base + Hive 4.0.0
+│   ├── Dockerfile              # FROM hadoop-base + Hive 4.0.0 + Tez 0.10.4
 │   └── conf/
-│       └── hive-site.xml
+│       ├── hive-site.xml       # Metastore, HiveServer2, engine=tez
+│       └── tez-site.xml        # Tez AM/task memory and YARN classpath settings
 ├── spark/
 │   ├── Dockerfile              # FROM hadoop-base + Spark 3.5.1 (PySpark)
 │   └── conf/
@@ -285,10 +289,24 @@ make clean
 
 ---
 
-## Tuning for Production
+## Tuning
 
-- Raise `yarn.nodemanager.resource.memory-mb` in `hadoop/conf/yarn-site.xml`
+### Memory budget (16 GB machine default)
+
+| Layer | Allocation | Config file |
+|---|---|---|
+| YARN NodeManager pool | 10 240 MB | `hadoop/conf/yarn-site.xml` |
+| Tez AppMaster container | 4 096 MB | `hive/conf/tez-site.xml` |
+| Tez task containers | 4 096 MB each | `hive/conf/tez-site.xml` |
+| Spark driver | 2 g | `spark/conf/spark-defaults.conf` |
+| Spark executor | 4 g | `spark/conf/spark-defaults.conf` |
+| Infrastructure daemons | ~6 GB remainder | — |
+
+To increase Tez task memory, raise `tez.task.resource.memory.mb` in `hive/conf/tez-site.xml` and update `-Xmx` in `tez.task.launch.cmd-opts` to ~80% of that value. Also raise `yarn.nodemanager.resource.memory-mb` and `yarn.scheduler.maximum-allocation-mb` in `hadoop/conf/yarn-site.xml` to match.
+
+### For production
+
 - Set `dfs.replication` to `3` in `hdfs-site.xml` and add more DataNode replicas
-- Set `spark.executor.memory` / `spark.driver.memory` in `spark/conf/spark-defaults.conf`
-- Enable LDAP/Kerberos authentication in `hive-site.xml`
-- Use `hive.execution.engine=tez` or `spark` for faster Hive queries
+- Enable LDAP/Kerberos authentication in `hive-site.xml` and re-enable `hive.security.authorization.enabled`
+- Pin Hue to a specific version tag in `docker-compose.yml`
+- Move PostgreSQL metastore to an external managed database
