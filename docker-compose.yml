@@ -545,6 +545,9 @@ services:
       - jupyter-work:/home/jovyan/work
     ports:
       - "8888:8888"   # JupyterLab Web UI
+    command: >
+      bash -c "pip install --quiet plotly seaborn &&
+               start-notebook.sh --NotebookApp.token='hivespark'"
     networks:
       - hadoop-net
 
