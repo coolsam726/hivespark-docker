@@ -185,6 +185,195 @@ Notebooks saved to `/home/jovyan/work` inside the container are persisted in the
 
 ---
 
+### Data Visualisation (Matplotlib & Plotly)
+
+Both `matplotlib` and `plotly` are installed automatically when JupyterLab starts (see `docker-compose.yml`). Open a notebook at http://localhost:8888 and use the patterns below.
+
+#### Setup — SparkSession with Hive
+
+```python
+import os
+from pyspark.sql import SparkSession
+from pyspark.sql import functions as F
+
+spark = SparkSession.builder \
+    .appName("visualisation") \
+    .master(os.environ["SPARK_MASTER"]) \
+    .config("hive.metastore.uris", "thrift://hive-metastore:9083") \
+    .config("spark.sql.warehouse.dir", "hdfs://namenode:9000/user/hive/warehouse") \
+    .enableHiveSupport() \
+    .getOrCreate()
+
+# Load a Hive table as a Spark DataFrame (no SQL strings needed)
+df = spark.table("my_database.my_table")
+```
+
+> Always reduce the data with aggregations or `.limit()` before calling `.toPandas()` — never collect a full large table.
+
+---
+
+#### Matplotlib
+
+Good for static charts, publication-quality figures, and quick exploratory plots.
+
+```python
+import matplotlib.pyplot as plt
+
+# --- Bar chart ---
+pdf = df.groupBy("attack_cat") \
+        .agg(F.count("*").alias("cnt")) \
+        .orderBy(F.desc("cnt")) \
+        .toPandas()
+
+fig, ax = plt.subplots(figsize=(12, 5))
+ax.bar(pdf["attack_cat"], pdf["cnt"], color="steelblue")
+ax.set_xlabel("Attack Category")
+ax.set_ylabel("Count")
+ax.set_title("Attack Category Distribution")
+plt.xticks(rotation=30, ha="right")
+plt.tight_layout()
+plt.show()
+```
+
+```python
+# --- Pie chart ---
+fig, ax = plt.subplots(figsize=(7, 7))
+ax.pie(pdf["cnt"], labels=pdf["attack_cat"], autopct="%1.1f%%", startangle=140)
+ax.set_title("Attack Category Share")
+plt.show()
+```
+
+```python
+# --- Horizontal bar (easier to read long labels) ---
+pdf_sorted = pdf.sort_values("cnt")
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.barh(pdf_sorted["attack_cat"], pdf_sorted["cnt"], color="coral")
+ax.set_xlabel("Count")
+ax.set_title("Attack Categories (horizontal)")
+plt.tight_layout()
+plt.show()
+```
+
+```python
+# --- Box plot (distribution of a numeric column per group) ---
+sample_pdf = df.filter((F.col("dur") > 0) & (F.col("dur") < 100)) \
+               .select("attack_cat", "dur") \
+               .sample(fraction=0.05) \
+               .toPandas()
+
+groups = [g["dur"].values for _, g in sample_pdf.groupby("attack_cat")]
+labels = [name for name, _ in sample_pdf.groupby("attack_cat")]
+
+fig, ax = plt.subplots(figsize=(12, 5))
+ax.boxplot(groups, labels=labels, vert=True)
+ax.set_xlabel("Attack Category")
+ax.set_ylabel("Duration (s)")
+ax.set_title("Connection Duration by Attack Category")
+plt.xticks(rotation=30, ha="right")
+plt.tight_layout()
+plt.show()
+```
+
+---
+
+#### Plotly
+
+Good for interactive charts — hover tooltips, zoom, and pan work out of the box in JupyterLab.
+
+```python
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+pdf = df.groupBy("attack_cat") \
+        .agg(F.count("*").alias("cnt")) \
+        .orderBy(F.desc("cnt")) \
+        .toPandas()
+```
+
+```python
+# --- Interactive bar chart ---
+fig = px.bar(pdf, x="attack_cat", y="cnt", color="attack_cat",
+             title="Attack Category Distribution",
+             labels={"cnt": "Count", "attack_cat": "Category"})
+fig.show()
+```
+
+```python
+# --- Pie / donut chart ---
+fig = px.pie(pdf, values="cnt", names="attack_cat",
+             title="Attack Category Share", hole=0.3)
+fig.show()
+```
+
+```python
+# --- Grouped bar: two metrics side by side ---
+byte_pdf = df.groupBy("attack_cat") \
+             .agg(F.avg("sbytes").alias("avg_src_bytes"),
+                  F.avg("dbytes").alias("avg_dst_bytes")) \
+             .toPandas()
+
+fig = go.Figure()
+fig.add_trace(go.Bar(name="Avg Src Bytes", x=byte_pdf["attack_cat"], y=byte_pdf["avg_src_bytes"]))
+fig.add_trace(go.Bar(name="Avg Dst Bytes", x=byte_pdf["attack_cat"], y=byte_pdf["avg_dst_bytes"]))
+fig.update_layout(barmode="group", title="Avg Source vs Destination Bytes by Category")
+fig.show()
+```
+
+```python
+# --- Box plot (interactive) ---
+sample_pdf = df.filter((F.col("dur") > 0) & (F.col("dur") < 100)) \
+               .select("attack_cat", "dur") \
+               .sample(fraction=0.05) \
+               .toPandas()
+
+fig = px.box(sample_pdf, x="attack_cat", y="dur",
+             title="Connection Duration by Attack Category",
+             labels={"dur": "Duration (s)", "attack_cat": "Category"})
+fig.update_layout(xaxis_tickangle=-30)
+fig.show()
+```
+
+```python
+# --- Heatmap: service vs attack category ---
+heatmap_pdf = df.groupBy("service", "attack_cat") \
+                .agg(F.count("*").alias("cnt")) \
+                .filter(F.col("service") != "-") \
+                .toPandas() \
+                .pivot(index="service", columns="attack_cat", values="cnt") \
+                .fillna(0)
+
+fig = px.imshow(heatmap_pdf, aspect="auto",
+                title="Heatmap: Service vs Attack Category",
+                color_continuous_scale="Reds")
+fig.show()
+```
+
+```python
+# --- Subplots: combine multiple charts in one figure ---
+fig = make_subplots(rows=1, cols=2,
+                    subplot_titles=("Attack Distribution", "Avg Src Bytes"))
+
+fig.add_trace(go.Bar(x=pdf["attack_cat"], y=pdf["cnt"], name="Count"), row=1, col=1)
+fig.add_trace(go.Bar(x=byte_pdf["attack_cat"], y=byte_pdf["avg_src_bytes"],
+                     name="Avg Src Bytes"), row=1, col=2)
+fig.update_layout(title_text="UNSW-NB15 Overview", showlegend=False)
+fig.show()
+```
+
+---
+
+#### Quick Comparison
+
+| Feature | Matplotlib | Plotly |
+|---|---|---|
+| Interactivity | Static | Hover, zoom, pan |
+| Export | PNG / SVG / PDF | HTML / PNG / SVG |
+| Subplots | `plt.subplots()` | `make_subplots()` |
+| Best for | Reports, publications | Dashboards, exploration |
+
+---
+
 ### PyCharm Database Tool
 
 PyCharm's built-in Database tool connects to HiveServer2 via the Apache Hive JDBC driver.
