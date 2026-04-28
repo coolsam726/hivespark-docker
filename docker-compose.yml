@@ -543,6 +543,7 @@ services:
         condition: service_started
     volumes:
       - jupyter-work:/home/jovyan/work
+      - /opt/bigdata/wk12_jupyter:/home/jovyan/wk12_jupyter
     ports:
       - "8888:8888"   # JupyterLab Web UI
     command: >
